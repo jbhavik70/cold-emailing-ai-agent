@@ -1,0 +1,298 @@
+{
+  "name": "Cold Email Workflow — Bhavik",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1U3IDSdQCowA-3sfipx7V8M3iVIhV5TILCvAT5RIEYuQ/edit?usp=sharing"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "master"
+        },
+        "filtersUI": {},
+        "options": {}
+      },
+      "id": "node-2",
+      "name": "Get Sheet Rows",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_SHEETS_CRED_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "NEW",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "leftValue": "={{ $json.Email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "node-3",
+      "name": "Filter NEW Rows",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const title = ($json['Title'] || '').toLowerCase();\nconst manualTemplate = ($json['Template Type'] || '').trim();\n\nconst DOC_IDS = {\n  recruiter:       '1HLxoep1-pHOsEILnbN5Wo05rttSzeXfFAoZbkgxE2vw',\n  hiring_manager:  '1bgMDkgTz00kPX7YYvCIFPp7zdgRzuT-oG7_nybgJd_A',\n  founder:         '1ovT0WXGH4rxm4FCCSRB0Lfp6GZWdtks7_ajx9iDMo2M',\n  peer_referral:   '19pu_EIVp0Swg23xSdeKW9HtsN-EfIViakyt5hyTTYoU',\n  generic:         '19pu_EIVp0Swg23xSdeKW9HtsN-EfIViakyt5hyTTYoU'\n};\n\nlet template;\nif (manualTemplate) {\n  template = manualTemplate.toLowerCase();\n} else if (/recruiter|talent|\\bhr\\b|human resources/i.test(title)) {\n  template = 'recruiter';\n} else if (/manager|lead|head|director|\\bvp\\b|vice president/i.test(title)) {\n  template = 'hiring_manager';\n} else if (/founder|ceo|co-founder|owner|president/i.test(title)) {\n  template = 'founder';\n} else if (/data scientist|ml engineer|machine learning|ai engineer|research|analyst|engineer|developer/i.test(title)) {\n  template = 'peer_referral';\n} else {\n  template = 'generic';\n}\n\nreturn { ...$json, resolvedTemplate: template, docId: DOC_IDS[template] };"
+      },
+      "id": "node-4",
+      "name": "Determine Template",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "documentURL": "=https://docs.google.com/document/d/{{ $json.docId }}/edit"
+      },
+      "id": "node-5",
+      "name": "Read Template Doc",
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "YOUR_DOCS_CRED_ID",
+          "name": "Google Docs"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// n8n's Google Docs node returns plain text directly in $json.content\nlet text = ($json.content || '').trim();\n\nif (!text) {\n  throw new Error('Google Doc is empty. Make sure the doc has content.');\n}\n\n// Normalize the template: collapse mid-sentence line breaks into spaces\n// so Claude doesn't reproduce them in its output\ntext = text.replace(/\\n\\n/g, '[[PARA]]');\ntext = text.replace(/\\n/g, ' ');\ntext = text.replace(/\\[\\[PARA\\]\\]/g, '\\n\\n');\ntext = text.replace(/ {2,}/g, ' ').trim();\n\nconst leadData = $('Determine Template').item.json;\nreturn { ...leadData, templateContent: text };"
+      },
+      "id": "node-6",
+      "name": "Extract Doc Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: 'You are writing a short, friendly cold outreach email for Bhavik, a data scientist and AI engineer in New York (GDG NYC lead, instructor, speaker).\\n\\nLead Info:\\n- Name: ' + $json.Name + '\\n- Title: ' + $json.Title + '\\n- Company: ' + $json.Company + '\\n\\nBase email template to adapt (written by Bhavik):\\n' + $json.templateContent + '\\n\\nInstructions:\\n1. Use the base template above as your starting point\\n2. Replace any [Name] placeholder with the lead actual first name\\n3. Replace any [Company] placeholder with the company name\\n4. Keep the tone Friendly and Concise - short paragraphs, no fluff\\n5. Do NOT invent facts about the person or company\\n6. Only personalize using the Name, Company, and Title provided above\\n7. Keep the sign-off exactly as written in the template\\n8. IMPORTANT: Do NOT break lines mid-sentence. Each paragraph must be one continuous line of text with no line breaks inside it.\\n9. Separate paragraphs with a blank line (double newline).\\n10. Return ONLY valid JSON with no markdown or code fences:\\n{\"subject\": \"...\", \"body\": \"...\"}' }] }) }}",
+        "options": {}
+      },
+      "id": "node-7",
+      "name": "Claude Generate Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1560, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "YOUR_CLAUDE_CRED_ID",
+          "name": "Claude API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Extract the text from Claude's response\nconst raw = $json.content?.[0]?.text || '';\n\n// Strip markdown code fences if present\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude returned invalid JSON: ' + cleaned);\n}\n\n// Convert body to clean HTML so Gmail renders it properly\n// Step 1: collapse any remaining mid-sentence line breaks into spaces\nlet body = (parsed.body || '');\nbody = body.replace(/\\n\\n/g, '[[PARA]]');\nbody = body.replace(/\\n/g, ' ');\nbody = body.replace(/\\[\\[PARA\\]\\]/g, '\\n\\n');\nbody = body.replace(/ {2,}/g, ' ').trim();\n\n// Step 2: convert paragraphs to <p> tags for clean HTML rendering\nconst htmlBody = body\n  .split(/\\n\\n+/)\n  .map(p => p.trim())\n  .filter(p => p.length > 0)\n  .map(p => '<p>' + p + '</p>')\n  .join('\\n');\n\nconst leadData = $('Extract Doc Text').item.json;\nreturn { ...leadData, emailSubject: parsed.subject, emailBody: htmlBody };"
+      },
+      "id": "node-7b",
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Filter NEW Rows').item.json.Email }}",
+        "subject": "={{ $json.emailSubject }}",
+        "emailType": "html",
+        "message": "={{ $json.emailBody }}",
+        "options": {}
+      },
+      "id": "node-8",
+      "name": "Send Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2,
+      "position": [2000, 300],
+      "onError": "continueErrorOutput",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_GMAIL_CRED_ID",
+          "name": "Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1U3IDSdQCowA-3sfipx7V8M3iVIhV5TILCvAT5RIEYuQ/edit?usp=sharing"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "master"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $('Filter NEW Rows').item.json.Email }}",
+            "Status": "Error",
+            "Error Message": "={{ $json.error?.message || $json.message || 'Unknown error' }}"
+          },
+          "matchingColumns": ["Email"]
+        }
+      },
+      "id": "node-10",
+      "name": "Update — Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2440, 160],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_SHEETS_CRED_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "mode": "url",
+          "value": "https://docs.google.com/spreadsheets/d/1U3IDSdQCowA-3sfipx7V8M3iVIhV5TILCvAT5RIEYuQ/edit?usp=sharing"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "master"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $('Filter NEW Rows').item.json.Email }}",
+            "Status": "Sent",
+            "Sent At": "={{ new Date().toISOString() }}",
+            "Email Content": "={{ $json.emailBody }}"
+          },
+          "matchingColumns": ["Email"]
+        }
+      },
+      "id": "node-11",
+      "name": "Update — Sent",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [2440, 440],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_SHEETS_CRED_ID",
+          "name": "Google Sheets"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [{ "node": "Get Sheet Rows", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Sheet Rows": {
+      "main": [
+        [{ "node": "Filter NEW Rows", "type": "main", "index": 0 }]
+      ]
+    },
+    "Filter NEW Rows": {
+      "main": [
+        [{ "node": "Determine Template", "type": "main", "index": 0 }]
+      ]
+    },
+    "Determine Template": {
+      "main": [
+        [{ "node": "Read Template Doc", "type": "main", "index": 0 }]
+      ]
+    },
+    "Read Template Doc": {
+      "main": [
+        [{ "node": "Extract Doc Text", "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Doc Text": {
+      "main": [
+        [{ "node": "Claude Generate Email", "type": "main", "index": 0 }]
+      ]
+    },
+    "Claude Generate Email": {
+      "main": [
+        [{ "node": "Parse Claude Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Claude Response": {
+      "main": [
+        [{ "node": "Send Gmail", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Gmail": {
+      "main": [
+        [{ "node": "Update — Sent", "type": "main", "index": 0 }],
+        [{ "node": "Update — Error", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
