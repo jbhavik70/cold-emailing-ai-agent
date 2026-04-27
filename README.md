@@ -1,58 +1,68 @@
 # Cold Emailing AI Agent
 
-An automated cold email workflow built with n8n that reads leads from Google Sheets, generates personalized emails using Claude AI, and sends them via Gmail — with full status tracking and error handling.
+An automated cold email workflow built with n8n that reads leads from Google Sheets, scrapes company websites for research, generates fully personalized emails using Claude AI, and sends them via Gmail — with full status tracking and error handling.
 
 ---
 
 ## Overview
 
-Every day you upload Apollo leads into a Google Sheet with `Status = NEW`. This workflow automatically picks up only those new rows, personalizes an email for each lead based on their job title, sends it via Gmail, and updates the sheet with the result.
+Every day you upload Apollo leads into a Google Sheet with `Status = NEW`. This workflow automatically picks up only those new rows, scrapes each company's website for real context, personalizes an email for each lead based on their job title and actual company research, sends it via Gmail, and updates the sheet with the result.
 
-No manual copy-pasting. No duplicate sends. Every email is unique.
+No manual copy-pasting. No duplicate sends. Every email is unique and grounded in real company information.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        n8n Workflow                                  │
-│                                                                      │
-│  [1] Manual Trigger                                                  │
-│         │                                                            │
-│         ▼                                                            │
-│  [2] Google Sheets ──── Read all rows from "master" tab             │
-│         │                                                            │
-│         ▼                                                            │
-│  [3] Filter ─────────── Only rows where Status = NEW                │
-│         │               Skip rows with empty Email                  │
-│         ▼                                                            │
-│  [4] Code Node ──────── Detect title group → map to Google Doc ID   │
-│         │                                                            │
-│         ▼                                                            │
-│  [5] Google Docs ─────── Read the matching email template doc       │
-│         │                                                            │
-│         ▼                                                            │
-│  [6] Code Node ──────── Extract plain text from doc                 │
-│         │                                                            │
-│         ▼                                                            │
-│  [7] Claude API ─────── Personalize email (Haiku model)             │
-│  (HTTP Request)         Input: Name, Title, Company + template      │
-│         │               Output: JSON { subject, body }              │
-│         ▼                                                            │
-│  [8] Code Node ──────── Parse Claude response → clean HTML body     │
-│         │                                                            │
-│         ▼                                                            │
-│  [9] Gmail ──────────── Send HTML email                             │
-│         │                                                            │
-│    ┌────┴────┐                                                       │
-│    ▼         ▼                                                       │
-│ [10] Sheets  [11] Sheets                                            │
-│  Update:      Update:                                               │
-│  Status=Sent  Status=Error                                          │
-│  Sent At=now  Error Message                                         │
-│  Email Content                                                       │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          n8n Workflow                                     │
+│                                                                           │
+│  [1] Manual Trigger                                                       │
+│         │                                                                 │
+│         ▼                                                                 │
+│  [2] Google Sheets ──────── Read all rows from "master" tab              │
+│         │                                                                 │
+│         ▼                                                                 │
+│  [3] Filter ─────────────── Status = NEW + Email not empty               │
+│         │                                                                 │
+│         ▼                                                                 │
+│  [4] Code Node ──────────── Detect title group → map to Google Doc ID    │
+│         │                   Extract first name from full name            │
+│         ▼                                                                 │
+│  [5] Google Docs ────────── Read matching email template doc             │
+│         │                                                                 │
+│         ▼                                                                 │
+│  [6] Code Node ──────────── Extract plain text from doc                  │
+│         │                                                                 │
+│         ▼                                                                 │
+│  [7] HTTP Request ───────── Fetch company website (Company URL column)   │
+│         │                   Graceful fallback if site is blocked         │
+│         ▼                                                                 │
+│  [8] Code Node ──────────── Strip HTML → clean text (4000 char limit)    │
+│         │                   Pass as companyResearch to Claude            │
+│         ▼                                                                 │
+│  [9] Claude API ─────────── Personalize email using:                     │
+│  (HTTP Request)             - Structured {{PLACEHOLDER}} template        │
+│         │                   - Real company research from website         │
+│         │                   - Lead data (name, title, company)           │
+│         │                   - Hardcoded proof points + links             │
+│         ▼                                                                 │
+│  [10] Code Node ─────────── Parse Claude JSON response                   │
+│         │                   Bold recruiter labels                        │
+│         │                   Convert URLs to HTML links                   │
+│         │                   Build clean HTML paragraphs                  │
+│         ▼                                                                 │
+│  [11] Gmail ─────────────── Send HTML email as "Bhavik"                  │
+│         │                                                                 │
+│    ┌────┴────┐                                                            │
+│    ▼         ▼                                                            │
+│ [12] Sheets  [13] Sheets                                                 │
+│  Update:      Update:                                                    │
+│  Status=Sent  Status=Error                                               │
+│  Sent At=now  Error Message                                              │
+│  Email Content                                                            │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -66,6 +76,7 @@ No manual copy-pasting. No duplicate sends. Every email is unique.
 | **Google Docs** | Email template storage (one doc per audience type) |
 | **Claude AI (Haiku)** | Email personalization via Anthropic API |
 | **Gmail** | Email sending |
+| **HTTP Request** | Company website scraping for real research context |
 
 ---
 
@@ -79,6 +90,7 @@ Create a sheet named `master` with these exact column headers:
 | `Email` | Lead's email address |
 | `Title` | Lead's job title (used for template detection) |
 | `Company` | Company name |
+| `Company URL` | Company website URL (e.g. `https://openai.com`) — scraped automatically for research |
 | `Template Type` | Optional override (`recruiter`, `hiring_manager`, `founder`, `peer_referral`, `generic`) |
 | `Email Content` | Auto-filled after send — the exact email body sent |
 | `Status` | Set to `NEW` when uploading. Workflow updates to `Sent` or `Error` |
@@ -95,27 +107,58 @@ The workflow automatically detects the right email template based on the lead's 
 
 | Title Contains | Template Used | Goal |
 |---|---|---|
-| Recruiter, Talent, HR | `recruiter` | Full-time job opportunity |
-| Manager, Lead, Head, Director, VP | `hiring_manager` | Explore team fit |
-| Founder, CEO, Co-Founder, Owner | `founder` | Pitch AI/ML value |
-| Data Scientist, Engineer, Analyst, Researcher | `peer_referral` | Referral + genuine connection |
-| Everything else | `generic` | Safe fallback |
+| Recruiter, Talent, HR | `recruiter` | Introduce Bhavik directly with proof points |
+| Manager, Lead, Head, Director, VP | `hiring_manager` | Show technical fit and shipped work |
+| Founder, CEO, Co-Founder, Owner | `founder` | Pitch direct operational value |
+| Data Scientist, Engineer, Analyst, Researcher | `peer_referral` | Genuine connection + referral ask |
+| Everything else | `generic` | Referral ask with honest framing |
 
 > If you fill in the `Template Type` column manually on any row, it overrides the auto-detection.
 
 ---
 
+## Email Template System
+
+### How Templates Work
+Each template lives in its own Google Doc. The workflow reads the doc, scrapes the company website, then Claude fills in only the `{{PLACEHOLDER}}` markers — everything else is copied exactly as written.
+
+### Placeholder Reference
+
+| Placeholder | Filled By | Source |
+|---|---|---|
+| `{{FIRST_NAME}}` | Claude | First word of `Name` column |
+| `{{COMPANY}}` | Claude | `Company` column |
+| `{{SUBJECT_TAG}}` | Claude | Generated from company website research |
+| `{{COMPANY_SPECIFIC_REASON}}` | Claude | Company website research (generic) |
+| `{{HONEST_TAKE}}` | Claude | Company website research (generic) |
+| `{{COMPANY_SPECIFIC_PROJECT}}` | Claude | Company website research (hiring manager) |
+| `{{TECHNICAL_ANGLE}}` | Claude | Company website research (hiring manager) |
+| `{{PROOF_POINT}}` | Hardcoded | "architected a production GenAI system cutting intake-to-routing time by 75%..." |
+| `{{RECENT_MOVE}}` | Claude | Company website research (founder) |
+| `{{REAL_TAKE}}` | Claude | Company website research (founder) |
+| `{{PERSONALIZATION_LINE}}` | Claude | Company website research (founder) |
+| `{{COMPANY_HOOK}}` | Claude | Company website research (recruiter) |
+
+### Hardcoded Fixed Values (same across all emails)
+- **LinkedIn:** `https://www.linkedin.com/in/jbhavik70/` — renders as `LinkedIn` link
+- **Resume:** Google Doc link — renders as `Resume` link
+- **Recruiter snapshot:** Build / Lead / Communicate bullets copied word for word
+
+### Company Research Fallback
+If a company website blocks scraping (403, JS-only, timeout), the workflow continues and Claude writes a plausible observation using the company name and lead title. Nothing crashes.
+
+---
+
 ## Email Template Docs
 
-Create 5 Google Docs — one per audience type. Write your base email in each doc using `[Name]` and `[Company]` as placeholders. Claude will replace them during personalization.
+Create 4 Google Docs and paste each template with `{{PLACEHOLDER}}` markers as shown above.
 
 | Doc | Template Type |
 |---|---|
-| Email — Recruiter | `recruiter` |
+| Email — Generic | `generic` / `peer_referral` |
 | Email — Hiring Manager | `hiring_manager` |
 | Email — Founder | `founder` |
-| Email — Peer Referral | `peer_referral` |
-| Email — Generic | `generic` |
+| Email — Recruiter | `recruiter` |
 
 Paste each Doc's ID into the `DOC_IDS` map in the **Determine Template** node.
 
@@ -135,15 +178,12 @@ Go to **Settings → Credentials → New** and create:
 | Google Sheets OAuth2 | Get Sheet Rows, Update nodes | Authorize with your Google account |
 | Google Docs OAuth2 | Read Template Doc | Same Google account |
 | Gmail OAuth2 | Send Gmail | Account you want to send from |
-| HTTP Header Auth | Claude Generate Email | Header: `x-api-key` → your Anthropic API key |
+| HTTP Header Auth | Claude Generate Email | Header Name: `x-api-key` → your Anthropic API key |
 
 ### 3. Connect Credentials to Nodes
-Open each node in n8n and select the matching credential from the dropdown.
+Open each node in n8n and select the matching credential from the dropdown. Click **Save** after connecting all credentials — this is required for them to persist.
 
-### 4. Update Google Sheet URL
-In nodes **Get Sheet Rows**, **Update — Sent**, and **Update — Error**, paste your Google Sheet URL.
-
-### 5. Paste Google Doc IDs
+### 4. Paste Google Doc IDs
 Open the **Determine Template** node and replace the placeholder IDs in `DOC_IDS`:
 
 ```javascript
@@ -162,10 +202,11 @@ Find a Doc ID from its URL: `docs.google.com/document/d/**THIS_PART**/edit`
 
 ## Running the Workflow
 
-1. Upload your Apollo leads to the Google Sheet with `Status = NEW`
-2. Open the workflow in n8n
-3. Click **Test Workflow**
-4. Check your Gmail Sent folder and the Google Sheet for updated statuses
+1. Export leads from Apollo
+2. Paste them into the Google Sheet `master` tab
+3. Set `Status = NEW` and fill in `Company URL` for each lead
+4. Open the workflow in n8n → click **Test Workflow**
+5. Check your Gmail Sent folder and the Google Sheet for updated statuses
 
 > The workflow only processes rows with `Status = NEW`. Already sent rows are never touched.
 
@@ -175,9 +216,11 @@ Find a Doc ID from its URL: `docs.google.com/document/d/**THIS_PART**/edit`
 
 | Volume | Estimated Cost |
 |---|---|
-| 100 emails | ~$0.12 |
-| 500 emails | ~$0.60 |
-| 1,000 emails | ~$1.20 |
+| 100 emails | ~$0.15 |
+| 500 emails | ~$0.75 |
+| 1,000 emails | ~$1.50 |
+
+*Slightly higher than base estimate due to company research context added to each prompt.*
 
 ---
 
@@ -186,4 +229,6 @@ Find a Doc ID from its URL: `docs.google.com/document/d/**THIS_PART**/edit`
 - Rows marked `Sent` are **never reprocessed** — the filter blocks them
 - Rows with a blank `Email` are **skipped automatically**
 - If Gmail fails, the row is marked `Error` with the reason saved — nothing is lost silently
+- If a company website blocks scraping, the workflow continues with graceful fallback
 - Running the workflow multiple times is completely safe
+- Success and error paths are wired directly from Gmail's outputs — no IF node logic
