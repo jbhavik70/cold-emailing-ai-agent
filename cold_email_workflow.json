@@ -40,25 +40,17 @@
     {
       "parameters": {
         "conditions": {
-          "options": {
-            "caseSensitive": false
-          },
+          "options": { "caseSensitive": false },
           "conditions": [
             {
               "leftValue": "={{ $json.Status }}",
               "rightValue": "NEW",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
+              "operator": { "type": "string", "operation": "equals" }
             },
             {
               "leftValue": "={{ $json.Email }}",
               "rightValue": "",
-              "operator": {
-                "type": "string",
-                "operation": "notEmpty"
-              }
+              "operator": { "type": "string", "operation": "notEmpty" }
             }
           ],
           "combinator": "and"
@@ -73,7 +65,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "const title = ($json['Title'] || '').toLowerCase();\nconst manualTemplate = ($json['Template Type'] || '').trim();\n\nconst DOC_IDS = {\n  recruiter:       '1HLxoep1-pHOsEILnbN5Wo05rttSzeXfFAoZbkgxE2vw',\n  hiring_manager:  '1bgMDkgTz00kPX7YYvCIFPp7zdgRzuT-oG7_nybgJd_A',\n  founder:         '1ovT0WXGH4rxm4FCCSRB0Lfp6GZWdtks7_ajx9iDMo2M',\n  peer_referral:   '19pu_EIVp0Swg23xSdeKW9HtsN-EfIViakyt5hyTTYoU',\n  generic:         '19pu_EIVp0Swg23xSdeKW9HtsN-EfIViakyt5hyTTYoU'\n};\n\nlet template;\nif (manualTemplate) {\n  template = manualTemplate.toLowerCase();\n} else if (/recruiter|talent|\\bhr\\b|human resources/i.test(title)) {\n  template = 'recruiter';\n} else if (/manager|lead|head|director|\\bvp\\b|vice president/i.test(title)) {\n  template = 'hiring_manager';\n} else if (/founder|ceo|co-founder|owner|president/i.test(title)) {\n  template = 'founder';\n} else if (/data scientist|ml engineer|machine learning|ai engineer|research|analyst|engineer|developer/i.test(title)) {\n  template = 'peer_referral';\n} else {\n  template = 'generic';\n}\n\nreturn { ...$json, resolvedTemplate: template, docId: DOC_IDS[template] };"
+        "jsCode": "const title = ($json['Title'] || '').toLowerCase();\nconst manualTemplate = ($json['Template Type'] || '').trim();\n\n// Extract first name from full name\nconst firstName = ($json['Name'] || '').split(' ')[0].trim();\n\nconst DOC_IDS = {\n  recruiter:      '1HLxoep1-pHOsEILnbN5Wo05rttSzeXfFAoZbkgxE2vw',\n  hiring_manager: '1bgMDkgTz00kPX7YYvCIFPp7zdgRzuT-oG7_nybgJd_A',\n  founder:        '1ovT0WXGH4rxm4FCCSRB0Lfp6GZWdtks7_ajx9iDMo2M',\n  peer_referral:  '19pu_EIVp0Swg23xSdeKW9HtsN-EfIViakyt5hyTTYoU',\n  generic:        '19pu_EIVp0Swg23xSdeKW9HtsN-EfIViakyt5hyTTYoU'\n};\n\nlet template;\nif (manualTemplate) {\n  template = manualTemplate.toLowerCase();\n} else if (/recruiter|talent|\\bhr\\b|human resources/i.test(title)) {\n  template = 'recruiter';\n} else if (/manager|lead|head|director|\\bvp\\b|vice president/i.test(title)) {\n  template = 'hiring_manager';\n} else if (/founder|ceo|co-founder|owner|president/i.test(title)) {\n  template = 'founder';\n} else if (/data scientist|ml engineer|machine learning|ai engineer|research|analyst|engineer|developer/i.test(title)) {\n  template = 'peer_referral';\n} else {\n  template = 'generic';\n}\n\nreturn { ...$json, resolvedTemplate: template, docId: DOC_IDS[template], firstName };"
       },
       "id": "node-4",
       "name": "Determine Template",
@@ -101,13 +93,45 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// n8n's Google Docs node returns plain text directly in $json.content\nlet text = ($json.content || '').trim();\n\nif (!text) {\n  throw new Error('Google Doc is empty. Make sure the doc has content.');\n}\n\n// Normalize the template: collapse mid-sentence line breaks into spaces\n// so Claude doesn't reproduce them in its output\ntext = text.replace(/\\n\\n/g, '[[PARA]]');\ntext = text.replace(/\\n/g, ' ');\ntext = text.replace(/\\[\\[PARA\\]\\]/g, '\\n\\n');\ntext = text.replace(/ {2,}/g, ' ').trim();\n\nconst leadData = $('Determine Template').item.json;\nreturn { ...leadData, templateContent: text };"
+        "jsCode": "const text = ($json.content || '').trim();\n\nif (!text) {\n  throw new Error('Google Doc is empty. Make sure the doc has content.');\n}\n\nconst leadData = $('Determine Template').item.json;\nreturn { ...leadData, templateContent: text };"
       },
       "id": "node-6",
       "name": "Extract Doc Text",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json['Company URL'] }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000,
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "id": "node-fetch",
+      "name": "Fetch Company Website",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1560, 300],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Get raw HTML from the fetch response\nconst html = ($json.data || $json.body || '').toString();\n\n// Strip scripts, styles, nav, footer, comments, and all tags\nlet text = html\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, '')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, '')\n  .replace(/<nav[\\s\\S]*?<\\/nav>/gi, '')\n  .replace(/<footer[\\s\\S]*?<\\/footer>/gi, '')\n  .replace(/<header[\\s\\S]*?<\\/header>/gi, '')\n  .replace(/<!--[\\s\\S]*?-->/g, '')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/g, ' ')\n  .replace(/&amp;/g, '&')\n  .replace(/&lt;/g, '<')\n  .replace(/&gt;/g, '>')\n  .replace(/&quot;/g, '\"')\n  .replace(/\\s+/g, ' ')\n  .trim()\n  .substring(0, 4000);\n\n// Carry all lead + template data forward with company research\nconst leadData = $('Extract Doc Text').item.json;\nreturn { ...leadData, companyResearch: text };"
+      },
+      "id": "node-extract",
+      "name": "Extract Page Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300]
     },
     {
       "parameters": {
@@ -125,14 +149,14 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: 'You are writing a short, friendly cold outreach email for Bhavik, a data scientist and AI engineer in New York (GDG NYC lead, instructor, speaker).\\n\\nLead Info:\\n- Name: ' + $json.Name + '\\n- Title: ' + $json.Title + '\\n- Company: ' + $json.Company + '\\n\\nBase email template to adapt (written by Bhavik):\\n' + $json.templateContent + '\\n\\nInstructions:\\n1. Use the base template above as your starting point\\n2. Replace any [Name] placeholder with the lead actual first name\\n3. Replace any [Company] placeholder with the company name\\n4. Keep the tone Friendly and Concise - short paragraphs, no fluff\\n5. Do NOT invent facts about the person or company\\n6. Only personalize using the Name, Company, and Title provided above\\n7. Keep the sign-off exactly as written in the template\\n8. IMPORTANT: Do NOT break lines mid-sentence. Each paragraph must be one continuous line of text with no line breaks inside it.\\n9. Separate paragraphs with a blank line (double newline).\\n10. Return ONLY valid JSON with no markdown or code fences:\\n{\"subject\": \"...\", \"body\": \"...\"}' }] }) }}",
+        "body": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: 'You are personalizing a cold outreach email for Bhavik Chopra, a data scientist, AI engineer, and developer relations lead based in New York.\\n\\nLEAD:\\n- First Name: ' + $json.firstName + '\\n- Full Name: ' + $json.Name + '\\n- Title: ' + $json.Title + '\\n- Company: ' + $json.Company + '\\n- Template Type: ' + $json.resolvedTemplate + '\\n\\nCOMPANY RESEARCH (scraped from ' + ($json[\\'Company URL\\'] || 'company website') + '):\\n' + ($json.companyResearch || 'No research available — use company name and lead title context only.') + '\\n\\nEMAIL TEMPLATE:\\n' + $json.templateContent + '\\n\\nFIXED VALUES — insert these exactly where indicated, do not rephrase:\\n- {{PROOF_POINT}} = architected a production GenAI system cutting intake-to-routing time by 75% with zero critical compliance incidents since deployment\\n- Build / Lead / Communicate bullets = copy word for word from the template\\n- LinkedIn URL = https://www.linkedin.com/in/jbhavik70/\\n- Resume URL = https://docs.google.com/document/d/15lZ5XpKPBBOuABvEvwb6-cXnLg9KhROLBBuwz3_JtZU/edit?usp=sharing\\n\\nYOUR JOB:\\nReplace ONLY the {{PLACEHOLDER}} markers using the instructions below. Copy every other word exactly as written in the template.\\n\\nPLACEHOLDERS:\\n- {{FIRST_NAME}} = lead first name\\n- {{COMPANY}} = company name\\n- {{SUBJECT_TAG}} = short specific tag based on template type and company research:\\n  generic: one specific thing you admire about what they have built or shipped\\n  hiring_manager: one specific thing about their team, stack, or recent technical work\\n  founder: the specific bet or move they are making (raise, launch, product direction)\\n  recruiter: infer role area from company research context (e.g. your AI hiring or Senior DS roles)\\n- {{COMPANY_SPECIFIC_REASON}} (generic only) = specific project, product, or design from research\\n- {{HONEST_TAKE}} (generic only) = one honest sentence on why it caught your eye\\n- {{COMPANY_SPECIFIC_PROJECT}} (hiring_manager only) = specific recent project, launch, or technical decision\\n- {{TECHNICAL_ANGLE}} (hiring_manager only) = one sentence on the technical or operational angle\\n- {{PROOF_POINT}} (hiring_manager only) = use the fixed value above\\n- {{RECENT_MOVE}} (founder only) = specific recent move from research (launch, raise, public take, product decision)\\n- {{REAL_TAKE}} (founder only) = one real take on it, not a congratulations\\n- {{PERSONALIZATION_LINE}} (founder only) = one line tied to what they are building or a recent signal\\n- {{COMPANY_HOOK}} (recruiter only) = one specific line on why this company or their hiring stood out\\n\\nRULES:\\n1. Fill ONLY {{PLACEHOLDER}} markers — copy all other text exactly as written\\n2. Use company research to fill placeholders — do not invent facts not found in the research\\n3. If research is empty or unclear, write a plausible honest observation using company name and lead title\\n4. Each paragraph must be ONE continuous line — no line breaks inside a paragraph\\n5. Separate paragraphs with exactly two newlines\\n6. Return ONLY valid JSON, no markdown, no code fences:\\n{\"subject\": \"...\", \"body\": \"...\"}' }] }) }}",
         "options": {}
       },
       "id": "node-7",
       "name": "Claude Generate Email",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1560, 300],
+      "position": [2000, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "YOUR_CLAUDE_CRED_ID",
@@ -143,13 +167,13 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// Extract the text from Claude's response\nconst raw = $json.content?.[0]?.text || '';\n\n// Strip markdown code fences if present\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude returned invalid JSON: ' + cleaned);\n}\n\n// Convert body to clean HTML so Gmail renders it properly\n// Step 1: collapse any remaining mid-sentence line breaks into spaces\nlet body = (parsed.body || '');\nbody = body.replace(/\\n\\n/g, '[[PARA]]');\nbody = body.replace(/\\n/g, ' ');\nbody = body.replace(/\\[\\[PARA\\]\\]/g, '\\n\\n');\nbody = body.replace(/ {2,}/g, ' ').trim();\n\n// Step 2: convert paragraphs to <p> tags for clean HTML rendering\nconst htmlBody = body\n  .split(/\\n\\n+/)\n  .map(p => p.trim())\n  .filter(p => p.length > 0)\n  .map(p => '<p>' + p + '</p>')\n  .join('\\n');\n\nconst leadData = $('Extract Doc Text').item.json;\nreturn { ...leadData, emailSubject: parsed.subject, emailBody: htmlBody };"
+        "jsCode": "// Extract Claude's response text\nconst raw = $json.content?.[0]?.text || '';\n\n// Strip markdown code fences if Claude added them\nconst cleaned = raw\n  .replace(/^```json\\s*/i, '')\n  .replace(/^```\\s*/i, '')\n  .replace(/\\s*```$/i, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleaned);\n} catch (e) {\n  throw new Error('Claude returned invalid JSON: ' + cleaned);\n}\n\nconst body = (parsed.body || '').trim();\n\n// Split on any newline(s) into paragraphs\nconst paragraphs = body\n  .split(/\\n+/)\n  .map(p => p.trim())\n  .filter(p => p.length > 0);\n\n// Build HTML — with special formatting rules\nconst htmlParts = paragraphs.map(p => {\n  // Bold the recruiter snapshot labels\n  p = p\n    .replace(/^Build:/, '<strong>Build:</strong>')\n    .replace(/^Lead:/, '<strong>Lead:</strong>')\n    .replace(/^Communicate:/, '<strong>Communicate:</strong>');\n\n  // Convert LinkedIn URL to a clean LinkedIn link\n  p = p.replace(\n    /https:\\/\\/www\\.linkedin\\.com\\/in\\/jbhavik70\\//g,\n    '<a href=\"https://www.linkedin.com/in/jbhavik70/\">LinkedIn</a>'\n  );\n\n  // Convert resume URL to a clean Resume link\n  p = p.replace(\n    /https:\\/\\/docs\\.google\\.com\\/document\\/d\\/15lZ5XpKPBBOuABvEvwb6-cXnLg9KhROLBBuwz3_JtZU\\/edit[^\\s]*/g,\n    '<a href=\"https://docs.google.com/document/d/15lZ5XpKPBBOuABvEvwb6-cXnLg9KhROLBBuwz3_JtZU/edit?usp=sharing\">Resume</a>'\n  );\n\n  return '<p style=\"margin:0 0 12px 0;\">' + p + '</p>';\n});\n\nconst htmlBody = htmlParts.join('\\n');\n\nconst leadData = $('Extract Page Text').item.json;\nreturn { ...leadData, emailSubject: parsed.subject, emailBody: htmlBody };"
       },
       "id": "node-7b",
       "name": "Parse Claude Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 300]
+      "position": [2220, 300]
     },
     {
       "parameters": {
@@ -157,13 +181,15 @@
         "subject": "={{ $json.emailSubject }}",
         "emailType": "html",
         "message": "={{ $json.emailBody }}",
-        "options": {}
+        "options": {
+          "senderName": "Bhavik"
+        }
       },
       "id": "node-8",
       "name": "Send Gmail",
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
-      "position": [2000, 300],
+      "position": [2440, 300],
       "onError": "continueErrorOutput",
       "credentials": {
         "gmailOAuth2": {
@@ -199,7 +225,7 @@
       "name": "Update — Error",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [2440, 160],
+      "position": [2660, 160],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "YOUR_SHEETS_CRED_ID",
@@ -235,7 +261,7 @@
       "name": "Update — Sent",
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
-      "position": [2440, 440],
+      "position": [2660, 440],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "YOUR_SHEETS_CRED_ID",
@@ -246,44 +272,34 @@
   ],
   "connections": {
     "Manual Trigger": {
-      "main": [
-        [{ "node": "Get Sheet Rows", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Get Sheet Rows", "type": "main", "index": 0 }]]
     },
     "Get Sheet Rows": {
-      "main": [
-        [{ "node": "Filter NEW Rows", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Filter NEW Rows", "type": "main", "index": 0 }]]
     },
     "Filter NEW Rows": {
-      "main": [
-        [{ "node": "Determine Template", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Determine Template", "type": "main", "index": 0 }]]
     },
     "Determine Template": {
-      "main": [
-        [{ "node": "Read Template Doc", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Read Template Doc", "type": "main", "index": 0 }]]
     },
     "Read Template Doc": {
-      "main": [
-        [{ "node": "Extract Doc Text", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Extract Doc Text", "type": "main", "index": 0 }]]
     },
     "Extract Doc Text": {
-      "main": [
-        [{ "node": "Claude Generate Email", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Fetch Company Website", "type": "main", "index": 0 }]]
+    },
+    "Fetch Company Website": {
+      "main": [[{ "node": "Extract Page Text", "type": "main", "index": 0 }]]
+    },
+    "Extract Page Text": {
+      "main": [[{ "node": "Claude Generate Email", "type": "main", "index": 0 }]]
     },
     "Claude Generate Email": {
-      "main": [
-        [{ "node": "Parse Claude Response", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Parse Claude Response", "type": "main", "index": 0 }]]
     },
     "Parse Claude Response": {
-      "main": [
-        [{ "node": "Send Gmail", "type": "main", "index": 0 }]
-      ]
+      "main": [[{ "node": "Send Gmail", "type": "main", "index": 0 }]]
     },
     "Send Gmail": {
       "main": [
