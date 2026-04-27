@@ -135,6 +135,17 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const firstName = $json.firstName || '';\nconst name = $json.Name || '';\nconst title = $json.Title || '';\nconst company = $json.Company || '';\nconst templateType = $json.resolvedTemplate || 'generic';\nconst companyUrl = $json['Company URL'] || 'company website';\nconst companyResearch = $json.companyResearch || 'No research available — use company name and lead title context only.';\nconst templateContent = $json.templateContent || '';\n\nconst prompt = `You are personalizing a cold outreach email for Bhavik Chopra, a data scientist, AI engineer, and developer relations lead based in New York.\n\nLEAD:\n- First Name: ${firstName}\n- Full Name: ${name}\n- Title: ${title}\n- Company: ${company}\n- Template Type: ${templateType}\n\nCOMPANY RESEARCH (scraped from ${companyUrl}):\n${companyResearch}\n\nEMAIL TEMPLATE:\n${templateContent}\n\nFIXED VALUES — insert these exactly where indicated, do not rephrase:\n- {{PROOF_POINT}} = architected a production GenAI system cutting intake-to-routing time by 75% with zero critical compliance incidents since deployment\n- Build / Lead / Communicate bullets = copy word for word from the template\n- LinkedIn URL = https://www.linkedin.com/in/jbhavik70/\n- Resume URL = https://docs.google.com/document/d/15lZ5XpKPBBOuABvEvwb6-cXnLg9KhROLBBuwz3_JtZU/edit?usp=sharing\n\nYOUR JOB:\nReplace ONLY the {{PLACEHOLDER}} markers using the instructions below. Copy every other word exactly as written in the template.\n\nPLACEHOLDERS:\n- {{FIRST_NAME}} = use the lead first name\n- {{COMPANY}} = use the company name\n- {{SUBJECT_TAG}} = short specific tag based on template type and company research:\n  generic: one specific thing you admire about what they have built or shipped\n  hiring_manager: one specific thing about their team, stack, or recent technical work\n  founder: the specific bet or move they are making (raise, launch, product direction)\n  recruiter: infer role area from company research context (e.g. your AI hiring or Senior DS roles)\n- {{COMPANY_SPECIFIC_REASON}} (generic only) = specific project, product, or design from research\n- {{HONEST_TAKE}} (generic only) = one honest sentence on why it caught your eye\n- {{COMPANY_SPECIFIC_PROJECT}} (hiring_manager only) = specific recent project, launch, or technical decision\n- {{TECHNICAL_ANGLE}} (hiring_manager only) = one sentence on the technical or operational angle\n- {{PROOF_POINT}} (hiring_manager only) = use the fixed value above\n- {{RECENT_MOVE}} (founder only) = specific recent move from research (launch, raise, public take, product decision)\n- {{REAL_TAKE}} (founder only) = one real take on it, not a congratulations\n- {{PERSONALIZATION_LINE}} (founder only) = one line tied to what they are building or a recent signal\n- {{COMPANY_HOOK}} (recruiter only) = one specific line on why this company or their hiring stood out\n\nRULES:\n1. Fill ONLY {{PLACEHOLDER}} markers — copy all other text exactly as written\n2. Use company research to fill placeholders — do not invent facts not found in the research\n3. If research is empty or unclear, write a plausible honest observation using company name and lead title\n4. Each paragraph must be ONE continuous line — no line breaks inside a paragraph\n5. Separate paragraphs with exactly two newlines\n6. Return ONLY valid JSON, no markdown, no code fences:\n{\"subject\": \"...\", \"body\": \"...\"}`;\n\nreturn { ...$json, claudePrompt: prompt };"
+      },
+      "id": "node-build-prompt",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://api.anthropic.com/v1/messages",
         "authentication": "genericCredentialType",
@@ -149,14 +160,14 @@
         "sendBody": true,
         "contentType": "raw",
         "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: 'You are personalizing a cold outreach email for Bhavik Chopra, a data scientist, AI engineer, and developer relations lead based in New York.\\n\\nLEAD:\\n- First Name: ' + $json.firstName + '\\n- Full Name: ' + $json.Name + '\\n- Title: ' + $json.Title + '\\n- Company: ' + $json.Company + '\\n- Template Type: ' + $json.resolvedTemplate + '\\n\\nCOMPANY RESEARCH (scraped from ' + ($json[\\'Company URL\\'] || 'company website') + '):\\n' + ($json.companyResearch || 'No research available — use company name and lead title context only.') + '\\n\\nEMAIL TEMPLATE:\\n' + $json.templateContent + '\\n\\nFIXED VALUES — insert these exactly where indicated, do not rephrase:\\n- {{PROOF_POINT}} = architected a production GenAI system cutting intake-to-routing time by 75% with zero critical compliance incidents since deployment\\n- Build / Lead / Communicate bullets = copy word for word from the template\\n- LinkedIn URL = https://www.linkedin.com/in/jbhavik70/\\n- Resume URL = https://docs.google.com/document/d/15lZ5XpKPBBOuABvEvwb6-cXnLg9KhROLBBuwz3_JtZU/edit?usp=sharing\\n\\nYOUR JOB:\\nReplace ONLY the {{PLACEHOLDER}} markers using the instructions below. Copy every other word exactly as written in the template.\\n\\nPLACEHOLDERS:\\n- {{FIRST_NAME}} = lead first name\\n- {{COMPANY}} = company name\\n- {{SUBJECT_TAG}} = short specific tag based on template type and company research:\\n  generic: one specific thing you admire about what they have built or shipped\\n  hiring_manager: one specific thing about their team, stack, or recent technical work\\n  founder: the specific bet or move they are making (raise, launch, product direction)\\n  recruiter: infer role area from company research context (e.g. your AI hiring or Senior DS roles)\\n- {{COMPANY_SPECIFIC_REASON}} (generic only) = specific project, product, or design from research\\n- {{HONEST_TAKE}} (generic only) = one honest sentence on why it caught your eye\\n- {{COMPANY_SPECIFIC_PROJECT}} (hiring_manager only) = specific recent project, launch, or technical decision\\n- {{TECHNICAL_ANGLE}} (hiring_manager only) = one sentence on the technical or operational angle\\n- {{PROOF_POINT}} (hiring_manager only) = use the fixed value above\\n- {{RECENT_MOVE}} (founder only) = specific recent move from research (launch, raise, public take, product decision)\\n- {{REAL_TAKE}} (founder only) = one real take on it, not a congratulations\\n- {{PERSONALIZATION_LINE}} (founder only) = one line tied to what they are building or a recent signal\\n- {{COMPANY_HOOK}} (recruiter only) = one specific line on why this company or their hiring stood out\\n\\nRULES:\\n1. Fill ONLY {{PLACEHOLDER}} markers — copy all other text exactly as written\\n2. Use company research to fill placeholders — do not invent facts not found in the research\\n3. If research is empty or unclear, write a plausible honest observation using company name and lead title\\n4. Each paragraph must be ONE continuous line — no line breaks inside a paragraph\\n5. Separate paragraphs with exactly two newlines\\n6. Return ONLY valid JSON, no markdown, no code fences:\\n{\"subject\": \"...\", \"body\": \"...\"}' }] }) }}",
+        "body": "={{ JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1500, messages: [{ role: 'user', content: $json.claudePrompt }] }) }}",
         "options": {}
       },
       "id": "node-7",
       "name": "Claude Generate Email",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [2000, 300],
+      "position": [2220, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "YOUR_CLAUDE_CRED_ID",
@@ -173,7 +184,7 @@
       "name": "Parse Claude Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2220, 300]
+      "position": [2440, 300]
     },
     {
       "parameters": {
@@ -293,6 +304,9 @@
       "main": [[{ "node": "Extract Page Text", "type": "main", "index": 0 }]]
     },
     "Extract Page Text": {
+      "main": [[{ "node": "Build Prompt", "type": "main", "index": 0 }]]
+    },
+    "Build Prompt": {
       "main": [[{ "node": "Claude Generate Email", "type": "main", "index": 0 }]]
     },
     "Claude Generate Email": {
