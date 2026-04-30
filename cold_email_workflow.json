@@ -89,7 +89,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1120,
+        900,
         300
       ]
     },
@@ -103,7 +103,7 @@
       "type": "n8n-nodes-base.googleDocs",
       "typeVersion": 2,
       "position": [
-        1340,
+        1120,
         300
       ],
       "credentials": {
@@ -123,7 +123,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1560,
+        1340,
         300
       ]
     },
@@ -146,7 +146,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1780,
+        1560,
         300
       ],
       "onError": "continueRegularOutput"
@@ -161,7 +161,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2000,
+        1780,
         300
       ]
     },
@@ -175,7 +175,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2220,
+        2000,
         300
       ]
     },
@@ -209,7 +209,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        2440,
+        2220,
         300
       ],
       "credentials": {
@@ -229,7 +229,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2660,
+        2440,
         300
       ]
     },
@@ -248,7 +248,7 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
       "position": [
-        2660,
+        2440,
         300
       ],
       "onError": "continueErrorOutput",
@@ -289,7 +289,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        2880,
+        2660,
         160
       ],
       "credentials": {
@@ -330,7 +330,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        2880,
+        2660,
         440
       ],
       "credentials": {
@@ -339,20 +339,6 @@
           "name": "Google Sheets"
         }
       }
-    },
-    {
-      "parameters": {
-        "batchSize": 10,
-        "options": {}
-      },
-      "id": "node-batch",
-      "name": "Split In Batches",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [
-        900,
-        300
-      ]
     },
     {
       "parameters": {
@@ -403,7 +389,7 @@
       "main": [
         [
           {
-            "node": "Split In Batches",
+            "node": "Determine Template",
             "type": "main",
             "index": 0
           }
@@ -516,39 +502,11 @@
         ]
       ]
     },
-    "Split In Batches": {
-      "main": [
-        [
-          {
-            "node": "Determine Template",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        []
-      ]
-    },
     "Update \u2014 Sent": {
-      "main": [
-        [
-          {
-            "node": "Split In Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": []
     },
     "Update \u2014 Error": {
-      "main": [
-        [
-          {
-            "node": "Split In Batches",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": []
     },
     "Schedule Trigger": {
       "main": [
