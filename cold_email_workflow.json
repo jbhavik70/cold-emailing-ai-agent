@@ -353,6 +353,27 @@
         900,
         300
       ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "7 9 * * *"
+            }
+          ]
+        },
+        "timezone": "America/New_York"
+      },
+      "id": "node-schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        160
+      ]
     }
   ],
   "connections": {
@@ -523,6 +544,17 @@
         [
           {
             "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Sheet Rows",
             "type": "main",
             "index": 0
           }
