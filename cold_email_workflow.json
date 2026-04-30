@@ -89,7 +89,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        900,
+        1120,
         300
       ]
     },
@@ -103,7 +103,7 @@
       "type": "n8n-nodes-base.googleDocs",
       "typeVersion": 2,
       "position": [
-        1120,
+        1340,
         300
       ],
       "credentials": {
@@ -123,7 +123,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1340,
+        1560,
         300
       ]
     },
@@ -146,7 +146,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        1560,
+        1780,
         300
       ],
       "onError": "continueRegularOutput"
@@ -161,7 +161,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1780,
+        2000,
         300
       ]
     },
@@ -175,7 +175,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2000,
+        2220,
         300
       ]
     },
@@ -216,7 +216,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
-        2220,
+        2440,
         300
       ],
       "credentials": {
@@ -236,7 +236,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2440,
+        2660,
         300
       ]
     },
@@ -255,7 +255,7 @@
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2,
       "position": [
-        2440,
+        2660,
         300
       ],
       "onError": "continueErrorOutput",
@@ -296,7 +296,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        2660,
+        2880,
         160
       ],
       "credentials": {
@@ -337,7 +337,7 @@
       "type": "n8n-nodes-base.googleSheets",
       "typeVersion": 4,
       "position": [
-        2660,
+        2880,
         440
       ],
       "credentials": {
@@ -353,7 +353,11 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "7 9 * * *"
+              "expression": "50,55 9 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "*/5 10-18 * * *"
             }
           ]
         },
@@ -366,6 +370,19 @@
       "position": [
         240,
         160
+      ]
+    },
+    {
+      "parameters": {
+        "maxItems": 10
+      },
+      "id": "node-limit",
+      "name": "Limit 10 Per Run",
+      "type": "n8n-nodes-base.limit",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
       ]
     }
   ],
@@ -396,7 +413,7 @@
       "main": [
         [
           {
-            "node": "Determine Template",
+            "node": "Limit 10 Per Run",
             "type": "main",
             "index": 0
           }
@@ -520,6 +537,17 @@
         [
           {
             "node": "Get Sheet Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limit 10 Per Run": {
+      "main": [
+        [
+          {
+            "node": "Determine Template",
             "type": "main",
             "index": 0
           }
